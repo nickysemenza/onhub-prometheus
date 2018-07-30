@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,10 +17,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const reportURL = "http://onhub.here/api/v1/diagnostic-report"
-const reportFetchFrequency = time.Second
-
 var (
+	contextKeyConfig  = contextKey("config")
 	reportFetchTiming = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "harrison",
 		Subsystem: "onhub",
@@ -50,17 +49,28 @@ func init() {
 
 func main() {
 
-	go func() {
-		for {
-			fetchAndProcess()
-			time.Sleep(reportFetchFrequency)
-		}
-	}()
+	//build config
+	config := &config{
+		bindAddr:       ":9999",
+		fetchFrequency: 15 * time.Second,
+		reportURL:      "http://onhub.here/api/v1/diagnostic-report",
+	}
+	ctx := context.WithValue(context.Background(), contextKeyConfig, config)
 
+	//process in background
+	go work(ctx)
+
+	//expose metrics over HTTP
 	log.Println("starting server...")
-
 	http.Handle("/metrics", promhttp.Handler())
-	log.Fatal(http.ListenAndServe(":9999", nil))
+	log.Fatal(http.ListenAndServe(config.bindAddr, nil))
+}
+
+type contextKey string
+type config struct {
+	bindAddr       string
+	fetchFrequency time.Duration
+	reportURL      string
 }
 
 type device struct {
@@ -80,6 +90,17 @@ func (d *device) isActive() bool {
 }
 
 type deviceList []device
+
+func getConfigFromContext(ctx context.Context) *config {
+	return ctx.Value(contextKeyConfig).(*config)
+}
+
+func work(ctx context.Context) {
+	for {
+		fetchAndProcess(ctx)
+		time.Sleep(getConfigFromContext(ctx).fetchFrequency)
+	}
+}
 
 //build a list of devices
 func (i *infoSection) buildDeviceList() deviceList {
@@ -126,10 +147,10 @@ func calculateMetrics(devices deviceList) {
 }
 
 //fetch the latest report, and process it
-func fetchAndProcess() {
+func fetchAndProcess(ctx context.Context) {
 	//fetch
 	start := time.Now()
-	if err := fetchDiagnosticReport(); err != nil {
+	if err := fetchDiagnosticReport(ctx); err != nil {
 		log.Fatalln("error fetching report", err)
 	}
 	durationMs := time.Since(start) / time.Millisecond
@@ -169,8 +190,8 @@ func parseReportFromFile() (*diagnosticreport.DiagnosticReport, error) {
 }
 
 //fetches the report
-func fetchDiagnosticReport() error {
-	resp, err := http.Get(reportURL)
+func fetchDiagnosticReport(ctx context.Context) error {
+	resp, err := http.Get(getConfigFromContext(ctx).reportURL)
 	if err != nil {
 		return err
 	}
