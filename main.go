@@ -1,11 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -159,17 +159,19 @@ func calculateMetrics(devices deviceList) {
 func fetchAndProcess(ctx context.Context) {
 	//fetch
 	start := time.Now()
-	if err := fetchDiagnosticReport(ctx); err != nil {
+	data, err := fetchDiagnosticReport(ctx)
+	if err != nil {
 		raven.CaptureError(err, nil)
 		log.Println("error fetching report", err)
 		return
+	} else {
+		durationMs := time.Since(start) / time.Millisecond
+		reportFetchTiming.Set(float64(durationMs))
+		log.Println("fetched diagnostic report.")
 	}
-	durationMs := time.Since(start) / time.Millisecond
-	reportFetchTiming.Set(float64(durationMs))
-	log.Println("fetched diagnostic report.")
 
 	//process
-	report, err := parseReportFromFile()
+	report, err := diagnosticreport.Parse(data)
 	if err != nil {
 		raven.CaptureError(err, nil)
 		log.Println("failed parsing", err)
@@ -188,39 +190,19 @@ func getDiagnosticReportInfo(report *diagnosticreport.DiagnosticReport) infoSect
 	return info
 }
 
-//reads a report file
-func parseReportFromFile() (*diagnosticreport.DiagnosticReport, error) {
-	file, err := os.Open("diagnostic-report")
-	if err != nil {
-		raven.CaptureError(err, nil)
-		return nil, err
-	}
-	defer file.Close()
-	data, err := ioutil.ReadAll(file)
-	if err != nil {
-		raven.CaptureError(err, nil)
-		return nil, err
-	}
-	return diagnosticreport.Parse(data)
-}
-
 //fetches the report
-func fetchDiagnosticReport(ctx context.Context) error {
+func fetchDiagnosticReport(ctx context.Context) ([]byte, error) {
 	resp, err := http.Get(getConfigFromContext(ctx).reportURL)
 	if err != nil {
-		raven.CaptureError(err, nil)
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
-
-	out, err := os.Create("diagnostic-report")
+	var out bytes.Buffer
+	_, err = io.Copy(&out, resp.Body)
 	if err != nil {
-		raven.CaptureError(err, nil)
-		return err
+		return nil, err
 	}
-	defer out.Close()
-	io.Copy(out, resp.Body)
-	return nil
+	return out.Bytes(), nil
 }
 
 //util func to trucate a string
