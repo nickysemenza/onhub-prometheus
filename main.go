@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/benmanns/onhub/diagnosticreport"
+	"github.com/getsentry/raven-go"
 	"github.com/hako/durafmt"
+	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -49,11 +51,18 @@ func init() {
 
 func main() {
 
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+	raven.SetDSN(os.Getenv("SENTRY_DSN"))
+	raven.SetEnvironment(os.Getenv("SENTRY_ENVIRONMENT"))
+
 	//build config
 	config := &config{
-		bindAddr:       ":9999",
-		fetchFrequency: 15 * time.Second,
-		reportURL:      "http://onhub.here/api/v1/diagnostic-report",
+		bindAddr:              os.Getenv("ADDRESS"),
+		fetchFrequencySeconds: 15,
+		reportURL:             "http://onhub.here/api/v1/diagnostic-report",
 	}
 	ctx := context.WithValue(context.Background(), contextKeyConfig, config)
 
@@ -61,16 +70,16 @@ func main() {
 	go work(ctx)
 
 	//expose metrics over HTTP
-	log.Println("starting server...")
+	log.Printf("starting server, addr=%s, frequency=%d seconds", config.bindAddr, config.fetchFrequencySeconds)
 	http.Handle("/metrics", promhttp.Handler())
 	log.Fatal(http.ListenAndServe(config.bindAddr, nil))
 }
 
 type contextKey string
 type config struct {
-	bindAddr       string
-	fetchFrequency time.Duration
-	reportURL      string
+	bindAddr              string
+	fetchFrequencySeconds int
+	reportURL             string
 }
 
 type device struct {
@@ -98,7 +107,7 @@ func getConfigFromContext(ctx context.Context) *config {
 func work(ctx context.Context) {
 	for {
 		fetchAndProcess(ctx)
-		time.Sleep(getConfigFromContext(ctx).fetchFrequency)
+		time.Sleep(time.Duration(getConfigFromContext(ctx).fetchFrequencySeconds) * time.Second)
 	}
 }
 
@@ -151,7 +160,9 @@ func fetchAndProcess(ctx context.Context) {
 	//fetch
 	start := time.Now()
 	if err := fetchDiagnosticReport(ctx); err != nil {
-		log.Fatalln("error fetching report", err)
+		raven.CaptureError(err, nil)
+		log.Println("error fetching report", err)
+		return
 	}
 	durationMs := time.Since(start) / time.Millisecond
 	reportFetchTiming.Set(float64(durationMs))
@@ -160,7 +171,9 @@ func fetchAndProcess(ctx context.Context) {
 	//process
 	report, err := parseReportFromFile()
 	if err != nil {
-		log.Fatalln("failed parsing")
+		raven.CaptureError(err, nil)
+		log.Println("failed parsing", err)
+		return
 	}
 	info := getDiagnosticReportInfo(report)
 
@@ -179,11 +192,13 @@ func getDiagnosticReportInfo(report *diagnosticreport.DiagnosticReport) infoSect
 func parseReportFromFile() (*diagnosticreport.DiagnosticReport, error) {
 	file, err := os.Open("diagnostic-report")
 	if err != nil {
+		raven.CaptureError(err, nil)
 		return nil, err
 	}
 	defer file.Close()
 	data, err := ioutil.ReadAll(file)
 	if err != nil {
+		raven.CaptureError(err, nil)
 		return nil, err
 	}
 	return diagnosticreport.Parse(data)
@@ -193,12 +208,14 @@ func parseReportFromFile() (*diagnosticreport.DiagnosticReport, error) {
 func fetchDiagnosticReport(ctx context.Context) error {
 	resp, err := http.Get(getConfigFromContext(ctx).reportURL)
 	if err != nil {
+		raven.CaptureError(err, nil)
 		return err
 	}
 	defer resp.Body.Close()
 
 	out, err := os.Create("diagnostic-report")
 	if err != nil {
+		raven.CaptureError(err, nil)
 		return err
 	}
 	defer out.Close()
