@@ -50,9 +50,12 @@
   revision = "7b7ae1e72eade09dbc9c2cfba3e6c4bae7b8bcac"
 
 [[projects]]
-  digest = "1:70e697d67ccaec45e16bac3a32380ebcd9e7e071079c60d0171d42cf1cf9748a"
+  digest = "1:9685bd41ea07a8b31aaab2c11f31a972e31f975dd155d3365a580a9e7eb5c90b"
   name = "github.com/joho/godotenv"
-  packages = ["."]
+  packages = [
+    ".",
+    "autoload",
+  ]
   pruneopts = "UT"
   revision = "a79fa1e548e2c689c241d10173efd51e5d689d5b"
   version = "v1.2.0"
@@ -124,7 +127,7 @@
     "github.com/benmanns/onhub/diagnosticreport",
     "github.com/getsentry/raven-go",
     "github.com/hako/durafmt",
-    "github.com/joho/godotenv",
+    "github.com/joho/godotenv/autoload",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
   ]

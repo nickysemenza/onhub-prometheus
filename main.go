@@ -14,7 +14,7 @@ import (
 	"github.com/benmanns/onhub/diagnosticreport"
 	"github.com/getsentry/raven-go"
 	"github.com/hako/durafmt"
-	"github.com/joho/godotenv"
+	_ "github.com/joho/godotenv/autoload"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -22,22 +22,16 @@ import (
 var (
 	contextKeyConfig  = contextKey("config")
 	reportFetchTiming = prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "harrison",
-		Subsystem: "onhub",
-		Name:      "report_fetch_timing",
-		Help:      "Number of ms it takes to fetch the report",
+		Name: "onhub_report_fetch_timing",
+		Help: "Number of ms it takes to fetch the report",
 	})
 	deviceCount = prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "harrison",
-		Subsystem: "onhub",
-		Name:      "active_devices",
-		Help:      "Number of active devices on the network",
+		Name: "onhub_active_devices",
+		Help: "Number of active devices on the network",
 	})
 	deviceState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "harrison",
-		Subsystem: "onhub",
-		Name:      "device_state",
-		Help:      "Current device state",
+		Name: "onhub_device_state",
+		Help: "Current device state",
 	},
 		[]string{"device_id", "hostname", "ip", "last_seen"})
 )
@@ -49,20 +43,19 @@ func init() {
 	prometheus.MustRegister(reportFetchTiming)
 }
 
-func main() {
+func getReportUrl() string {
+	return fmt.Sprintf("http://%s/api/v1/diagnostic-report", os.Getenv("ONHUB_HOST"))
+}
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+func main() {
 	raven.SetDSN(os.Getenv("SENTRY_DSN"))
 	raven.SetEnvironment(os.Getenv("SENTRY_ENVIRONMENT"))
 
 	//build config
 	config := &config{
-		bindAddr:              os.Getenv("ADDRESS"),
+		bindAddr:              ":9200",
 		fetchFrequencySeconds: 15,
-		reportURL:             "http://onhub.here/api/v1/diagnostic-report",
+		reportURL:             getReportUrl(),
 	}
 	ctx := context.WithValue(context.Background(), contextKeyConfig, config)
 
