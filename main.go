@@ -43,7 +43,7 @@ func init() {
 	prometheus.MustRegister(reportFetchTiming)
 }
 
-func getReportUrl() string {
+func getReportURL() string {
 	return fmt.Sprintf("http://%s/api/v1/diagnostic-report", os.Getenv("ONHUB_HOST"))
 }
 
@@ -54,8 +54,8 @@ func main() {
 	//build config
 	config := &config{
 		bindAddr:              ":9200",
-		fetchFrequencySeconds: 15,
-		reportURL:             getReportUrl(),
+		fetchFrequencySeconds: 600,
+		reportURL:             getReportURL(),
 	}
 	ctx := context.WithValue(context.Background(), contextKeyConfig, config)
 

@@ -9,5 +9,5 @@ docker-run:
 	docker run -p 9200:9200 -e "ONHUB_HOST=10.0.0.1" $(IMAGE) 
 docker-dev: docker-build docker-run
 
-docker-push:
+docker-push: docker-build
 	docker push $(IMAGE):latest
