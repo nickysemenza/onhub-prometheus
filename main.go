@@ -157,11 +157,10 @@ func fetchAndProcess(ctx context.Context) {
 		raven.CaptureError(err, nil)
 		log.Println("error fetching report", err)
 		return
-	} else {
-		durationMs := time.Since(start) / time.Millisecond
-		reportFetchTiming.Set(float64(durationMs))
-		log.Println("fetched diagnostic report.")
 	}
+	durationMs := time.Since(start) / time.Millisecond
+	reportFetchTiming.Set(float64(durationMs))
+	log.Println("fetched diagnostic report.")
 
 	//process
 	report, err := diagnosticreport.Parse(data)
