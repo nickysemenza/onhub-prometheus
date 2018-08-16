@@ -108,11 +108,6 @@ func work(ctx context.Context) {
 func (i *infoSection) buildDeviceList() deviceList {
 	var devices deviceList
 	for _, x := range i.ApState.Stations {
-		prettyName := x.DhcpHostname
-		if prettyName == "" {
-			prettyName = fmt.Sprintf("(%s)", truncateString(x.ID, 20))
-		}
-
 		ip := ""
 		if len(x.IPAddresses) > 0 {
 			ip = x.IPAddresses[0]
